@@ -1,10 +1,10 @@
 package providers
 
 import (
-	"errors"
+	"fmt"
 	"io/ioutil"
-	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/pusher/oauth2_proxy/pkg/apis/sessions"
 	"github.com/pusher/oauth2_proxy/pkg/logger"
@@ -30,34 +30,27 @@ func NewCarolProvider(p *ProviderData) *CarolProvider {
 	return &CarolProvider{ProviderData: p}
 }
 
-// GetEmailAddress returns the Client Id
-func (p *CarolProvider) GetEmailAddress(s *sessions.SessionState) (string, error) {
-	if s.AccessToken == "" {
-		return "", errors.New("missing access token")
-	}
-	req, err := http.NewRequest("GET",
-		p.ValidateURL.String()+s.AccessToken, nil)
-	if err != nil {
-		logger.Printf("failed building request %s", err)
-		return "", err
-	}
-	// NOTE this !!
-	//req.Close = true
-	json, err := requests.Request(req)
-	if err != nil {
-		logger.Printf("failed making request %s", err)
-		return "", err
-	}
-	return json.Get("client_id").String()
-}
-
 // ValidateSessionState returns the Client Id
 func (p *CarolProvider) ValidateSessionState(s *sessions.SessionState) bool {
 	accessToken := s.AccessToken
-	if accessToken == "" || p.Data().ValidateURL == nil || p.Data().ValidateURL.String() == "" {
+	if accessToken == "" || p.Data().ValidateURL == nil || p.Data().ValidateURL.String() == "" || s.Email == "" {
 		return false
 	}
-	endpoint := p.Data().ValidateURL.String() + accessToken
+	logger.Printf("Req info: email:%s", s.Email)
+	parts := strings.Split(s.Email, ".")
+	if len(parts) != 2 {
+		return false
+	}
+	logger.Printf("Req info: tenant:%s", parts[0])
+	logger.Printf("Req info: env:%s", parts[1])
+	url := &url.URL{
+		Scheme: p.Data().ValidateURL.Scheme,
+		Host:   fmt.Sprintf(p.Data().ValidateURL.Host, parts[0], parts[1]),
+		Path:   p.Data().ValidateURL.Path,
+	}
+	logger.Printf("Req info: url:%s", url.String())
+	endpoint := url.String() + accessToken
+	logger.Printf("Req info: endpoint:%s", endpoint)
 	resp, err := requests.RequestUnparsedResponse(endpoint, nil)
 	if err != nil {
 		logger.Printf("GET %s", stripToken(endpoint))

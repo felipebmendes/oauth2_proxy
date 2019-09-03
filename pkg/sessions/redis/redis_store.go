@@ -119,7 +119,7 @@ func (store *SessionStore) Load(req *http.Request) (*sessions.SessionState, erro
 
 // Load reads sessions.SessionState information from a ticket
 // cookie within the HTTP request object
-func (store *SessionStore) LoadCarolCookie(req *http.Request, tenant string) (*sessions.SessionState, error) {
+func (store *SessionStore) LoadCarolCookie(req *http.Request, tenant string, env string) (*sessions.SessionState, error) {
 	requestCookie, err := req.Cookie(store.CookieOptions.CookieName)
 	if err != nil {
 		return nil, fmt.Errorf("error loading session: %s", err)

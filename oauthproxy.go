@@ -113,14 +113,17 @@ type UpstreamProxy struct {
 // ServeHTTP proxies requests to the upstream provider while signing the
 // request headers
 func (u *UpstreamProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	logger.Printf("(u *UpstreamProxy) ServeHTTP(w http.ResponseWriter, r *http.Request")
 	w.Header().Set("GAP-Upstream-Address", u.upstream)
 	if u.auth != nil {
 		r.Header.Set("GAP-Auth", w.Header().Get("GAP-Auth"))
 		u.auth.SignRequest(r)
 	}
 	if u.wsHandler != nil && strings.ToLower(r.Header.Get("Connection")) == "upgrade" && r.Header.Get("Upgrade") == "websocket" {
+		logger.Printf("wsHandler")
 		u.wsHandler.ServeHTTP(w, r)
 	} else {
+		logger.Printf("handler")
 		u.handler.ServeHTTP(w, r)
 	}
 
@@ -737,19 +740,19 @@ func (p *OAuthProxy) CarolProxy(rw http.ResponseWriter, req *http.Request) {
 	/*var org, tenant string
 
 	org, tenant, err = p.getOrgTenant(req)*/
-	var tenant string
+	var tenant, env string
 
-	logger.Printf("Req info: host:%s path:%s header:%s", req.URL.Host, req.URL.Path, req.Header.Get("Cookie"))
+	logger.Printf("Req info: host: %s path: %s header: %s remAddr: %s", req.Host, req.URL, req.Header.Get("Cookie"), req.RemoteAddr)
 
-	req.URL.Host = "mendes-fmendes-totvs-com-br.jupyters.karol.ai"
-
-	tenant, err = p.getOrgTenant(req)
+	tenant, env = p.getOrgTenant(req)
 
 	logger.Printf("Req info: tenant:%s", tenant)
 
+	tenant = "mendes"
+
 	if session == nil {
 		//session, err = p.sessionStore.LoadCarolCookie(req, org, tenant)
-		session, err = p.sessionStore.LoadCarolCookie(req, tenant)
+		session, err = p.sessionStore.LoadCarolCookie(req, tenant, env)
 		if err != nil {
 			logger.Printf("Error loading cookied session: %s", err)
 		}
@@ -767,25 +770,26 @@ func (p *OAuthProxy) CarolProxy(rw http.ResponseWriter, req *http.Request) {
 		p.CarolErrorPage(rw, 401, "Unauthorized", "Unauthorized")
 	} else {
 		// we are authenticated
-		//rw.WriteHeader(http.StatusFound)
-		//req.URL.Host = "https://espacolaser-rafael-rui-totvs-com-br.jupyters.carol.ai/"
-		//p.serveMux.ServeHTTP(rw, req)
-		redirect, err := p.GetRedirect(req)
+		p.addHeadersForProxying(rw, req, session)
+		logger.Printf("Rw header: %s", rw.Header())
+		p.serveMux.ServeHTTP(rw, req)
+
+		/*redirect, err := p.GetRedirect(req)
 		if err != nil {
 			logger.Printf("Error obtaining redirect: %s", err.Error())
 			p.ErrorPage(rw, 500, "Internal Error", err.Error())
 			return
 		}
-		http.Redirect(rw, req, redirect, 302)
+		http.Redirect(rw, req, redirect, 200)*/
 	}
 }
 
-func (p *OAuthProxy) getOrgTenant(req *http.Request) (string, error) {
+func (p *OAuthProxy) getOrgTenant(req *http.Request) (string, string) {
 	//func (p *OAuthProxy) getOrgTenant(req *http.Request) (string, string, error) {
 
-	parts := strings.Split(req.URL.Host, ".")
+	parts := strings.Split(req.Host, ".")
 	if len(parts) != 4 {
-		return "", errors.New("URL doesn't have the necessary information")
+		return "", ""
 	}
 
 	env := parts[2]
@@ -793,17 +797,17 @@ func (p *OAuthProxy) getOrgTenant(req *http.Request) (string, error) {
 	subdomainParts := strings.Split(parts[0], "-")
 	//if len(subdomainParts) < 3 {
 	if len(subdomainParts) < 2 {
-		return "", errors.New("URL doesn't have the necessary information")
+		return "", ""
 	}
 
 	/*org = subdomainParts[0]
 	tenant = subdomainParts[1]
 	p.provider.Data().ValidateURL.Host = fmt.Sprintf(p.provider.Data().ValidateURL.Host, org, tenant, env)*/
-	tenant := strings.Replace(subdomainParts[0], "https://", "", -1)
-	p.provider.Data().ValidateURL.Host = fmt.Sprintf(p.provider.Data().ValidateURL.Host, tenant, env)
+	//tenant := strings.Replace(subdomainParts[0], "https://", "", -1)
+	tenant := subdomainParts[0]
 
 	//return org, tenant, nil
-	return tenant, nil
+	return tenant, env
 }
 
 // getAuthenticatedSession checks whether a user is authenticated and returns a session object and nil error if so

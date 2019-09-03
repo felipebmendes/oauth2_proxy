@@ -84,8 +84,8 @@ func (s *SessionStore) Load(req *http.Request) (*sessions.SessionState, error) {
 }*/
 
 // LoadCarolCookie reads sessions.SessionState information from Cookies within the
-func (s *SessionStore) LoadCarolCookie(req *http.Request, tenant string) (*sessions.SessionState, error) {
-	var cookieName = fmt.Sprintf(s.CookieOptions.CookieName, tenant)
+func (s *SessionStore) LoadCarolCookie(req *http.Request, tenant string, env string) (*sessions.SessionState, error) {
+	cookieName := fmt.Sprintf(s.CookieOptions.CookieName, tenant)
 	logger.Printf("Cookiename: %s", cookieName)
 	c, err := loadCookie(req, cookieName)
 	if err != nil {
@@ -100,6 +100,11 @@ func (s *SessionStore) LoadCarolCookie(req *http.Request, tenant string) (*sessi
 	if err != nil {
 		return nil, err
 	}
+	if tenant == "" || env == "" {
+		return nil, fmt.Errorf("Tenant and environment are not present")
+	}
+	session.Email = tenant + "." + env
+	logger.Printf("Session email: %s", session.Email)
 	return session, nil
 }
 
